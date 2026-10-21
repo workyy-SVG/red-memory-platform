@@ -3145,6 +3145,10 @@ function initMapModule() {
       + '图谱、路线清单与 AI 讲解不受影响。');
     return;
   }
+  if (!window.rgMapReadyBound) {
+    window.rgMapReadyBound = true;
+    document.addEventListener('rg:map-ready', function () { applyMapLayers(); });
+  }
   window.RgMap.init('rgMap');
 
   if (mapApi() && mapApi().ready()) {

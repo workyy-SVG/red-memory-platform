@@ -106,7 +106,9 @@
     if (window.AMap && window.AMap.Map) { state.AMap = window.AMap; cb(null); return; }
     if (!state.key) { cb('nokey'); return; }
 
-    if (state.sec) {
+    if (window.RG_AMAP_SERVICE_HOST) {
+      window._AMapSecurityConfig = { serviceHost: window.RG_AMAP_SERVICE_HOST };
+    } else if (state.sec) {
       window._AMapSecurityConfig = { securityJsCode: state.sec };
     }
     var old = document.getElementById('rg-amap-sdk');
@@ -116,10 +118,13 @@
     s.id = 'rg-amap-sdk';
     s.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(state.key)
       + '&plugin=AMap.MarkerCluster';
-    s.onerror = function () { cb('sdkfail'); };
+    var settled = false;
+    function done(err) { if (settled) return; settled = true; clearTimeout(timer); cb(err); }
+    var timer = setTimeout(function () { done('sdkfail'); }, 18000);
+    s.onerror = function () { done('sdkfail'); };
     s.onload = function () {
-      if (window.AMap && window.AMap.Map) { state.AMap = window.AMap; cb(null); }
-      else cb('sdkinvalid');
+      if (window.AMap && window.AMap.Map) { state.AMap = window.AMap; done(null); }
+      else done('sdkinvalid');
     };
     document.head.appendChild(s);
   }
@@ -129,6 +134,18 @@
     var el = $(containerId);
     if (!el) return;
     if (!getKey()) {
+      if (window.RG_MAP_CONFIG_URL && !state.configAttempted) {
+        state.configAttempted = true;
+        fetch(window.RG_MAP_CONFIG_URL,{cache:'no-store'})
+          .then(function (r) { if (!r.ok) throw Error(); return r.json(); })
+          .then(function (c) {
+            if (!c.configured || !c.key || !c.serviceHost) throw Error();
+            window.RG_AMAP_KEY = c.key;
+            window.RG_AMAP_SERVICE_HOST = new URL(c.serviceHost, location.href).href.replace(/\/$/, '');
+            init(containerId);
+          }).catch(function () { notify('nokey'); });
+        return;
+      }
       // 用户要求只使用高德底图：未配置 Key 时不加载任何免费瓦片，
       // 页面会通过 ready() 为假自动切到经纬度点位示意。
       state.backend = 'none';
@@ -157,6 +174,7 @@
       notify('ok');
       if (state.lastNodes) { renderNodes(state.lastNodes); }
       if (state.lastPlaces && state.lastPlaces.length) { renderPlaces(state.lastPlaces); }
+      document.dispatchEvent(new CustomEvent('rg:map-ready'));
     });
   }
 
