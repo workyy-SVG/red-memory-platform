@@ -316,8 +316,8 @@
       h += '<p>' + esc(t) + '</p>';
     });
     h += '<div class="ex-intro-meta">'
-      + '<span class="ex-tag gold">' + esc(EX.version || '') + '</span>'
-      + '<span class="ex-tag line">' + esc(EX.review_status || '待复核') + '</span>'
+      + '<span class="ex-tag gold">' + CH.length + ' 章主题展</span>'
+      + '<span class="ex-tag line">关键事实附来源</span>'
       + '</div>';
     h += '<div class="ex-intro-actions">';
     if (last) {
