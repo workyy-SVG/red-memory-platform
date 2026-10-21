@@ -1,0 +1,6 @@
+.env
+.env.*
+userdata/
+__pycache__/
+*.log
+*.zip
