@@ -9,7 +9,7 @@
  dialog.addEventListener('close',()=>lastFocus?.focus());
  const offline=document.createElement('div');offline.className='pub-offline';offline.textContent='当前离线 · 可阅读已缓存内容，收藏与进度保存在此浏览器';offline.hidden=navigator.onLine;document.body.prepend(offline);window.addEventListener('offline',()=>offline.hidden=false);window.addEventListener('online',()=>offline.hidden=true);
  function mount(){
-   const home=$('#exHomeWrap');if(home&&!$('.pub-utility')){const row=document.createElement('div');row.className='pub-utility';row.innerHTML='<strong>红色记忆 · 免费展示版</strong><div class="pub-tools"><button class="pub-btn" data-public="records">我的参观</button><button class="pub-btn" data-public="install">添加到桌面</button><button class="pub-btn" data-public="share">分享</button></div>';home.prepend(row)}
+   const home=$('#exHomeWrap');if(home&&!$('.pub-utility')){const row=document.createElement('div');row.className='pub-utility';row.innerHTML='<strong>红色记忆 · 公开体验版</strong><div class="pub-tools"><button class="pub-btn" data-public="records">我的参观</button><button class="pub-btn" data-public="install">添加到桌面</button><button class="pub-btn" data-public="share">分享</button></div>';home.prepend(row)}
    document.querySelectorAll('.a-card[data-aid]').forEach(card=>{if(card.querySelector('.pub-card-save'))return;const id=card.dataset.aid,b=document.createElement('button');b.className='pub-card-save';b.dataset.save=id;b.textContent=publicAPI.state?.favorites.includes(id)?'已收藏 · 取消':'收藏这段记忆';b.setAttribute('aria-label',b.textContent+' '+(card.querySelector('h3')?.textContent||''));card.appendChild(b)});
  }
  let scheduled=false;new MutationObserver(()=>{if(!scheduled){scheduled=true;requestAnimationFrame(()=>{scheduled=false;mount()})}}).observe(document.body,{childList:true,subtree:true});mount();
@@ -30,7 +30,7 @@
     case'continue':{dialog.close();const p=Object.values(publicAPI.progress())[0];window.RgExhibit?.openChapter(p?.last||'ch-01');break}
     case'library':dialog.close();$('#viewSeg [data-view="atlas"]')?.click();break;
     case'clear':localStorage.removeItem('rg.exhibition.progress.v1');toast('观展记录已清除');await records();break;
-    case'install':if(window.RgInstall?.standalone()){toast('你正在应用窗口中使用');break}if(window.RgInstall?.prompt())break;show('把红色记忆留在桌面','<p>电脑：使用支持安装的 Edge 或 Chrome 打开本站，选择浏览器地址栏的安装图标，或菜单中的「应用／安装此网站」。</p><p>iPhone / iPad：在 Safari 中打开，点击「分享」，选择「添加到主屏幕」。</p><p>Android：在支持安装的浏览器菜单中选择「安装应用」或「添加到主屏幕」。</p><p>安装能力随浏览器而异；校园网等普通 HTTP 地址可浏览，但安装通常需要正式 HTTPS 地址。本机 localhost 可用于开发测试。</p><p>第一次在线打开后会缓存页面和基础展览素材；离线时可浏览已缓存内容，收藏与进度在本浏览器保存；在线 AI 暂未开放。</p>');break;
+    case'install':if(window.RgInstall?.standalone()){toast('你正在应用窗口中使用');break}if(window.RgInstall?.prompt())break;show('把红色记忆留在桌面','<p>电脑：使用支持安装的 Edge 或 Chrome 打开本站，选择浏览器地址栏的安装图标，或菜单中的「应用／安装此网站」。</p><p>iPhone / iPad：在 Safari 中打开，点击「分享」，选择「添加到主屏幕」。</p><p>Android：在支持安装的浏览器菜单中选择「安装应用」或「添加到主屏幕」。</p><p>安装能力随浏览器而异；校园网等普通 HTTP 地址可浏览，但安装通常需要正式 HTTPS 地址。本机 localhost 可用于开发测试。</p><p>第一次在线打开后会缓存页面和基础展览素材；离线时可浏览已缓存内容，收藏与进度在本浏览器保存；全国在线 AI 需联网，按全站共享额度使用。</p>');break;
     case'share':{const url=location.origin+location.pathname+location.hash;if(['localhost','127.0.0.1'].includes(location.hostname)){show('分享给更多人','<p>当前是本机体验地址，其他人的手机不能通过这个地址访问。</p><p>正式部署并绑定 HTTPS 地址后，就可以分享链接或二维码。当前先体验完整功能。</p>');break}try{if(navigator.share)await navigator.share({title:'红色记忆',url});else{await navigator.clipboard.writeText(url);toast('链接已复制')}}catch{}break}
    }
  },true);

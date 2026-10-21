@@ -832,7 +832,7 @@
       + '<span class="ex-tag green">带章节上下文</span></div>';
     h += '<p>回答限定在本章事件与已审定史料片段内；检索不到会明确说「史料未载」。</p>';
     var ok = false;
-    try { ok = !!(b().serviceOk && b().serviceOk()); } catch (e) { ok = false; }
+    try { ok = !!window.RgOfflineAi || !!(b().serviceOk && b().serviceOk()); } catch (e) { ok = false; }
     if (!ok) {
       h += '<div class="ex-ai-offline">当前为离线模式：展陈文字、证据卡与摘要仍可阅读；'
         + 'AI 讲解需通过本地服务打开本页。</div>';
@@ -959,8 +959,8 @@
       + '<button type="button" class="ex-btn" data-sum-act="home">返回展览首页</button>'
       + '<button type="button" class="ex-btn" data-sum-act="clear">清除观展记录</button>'
       + '</div>';
-    h += '<div class="ex-sum-note">进度提示：「已浏览章节」关联当前访客并保存在服务端，离线时暂存在本机。'
-      + '换设备或清除访客Cookie后无法自动找回；访客身份有效期30天。</div>';
+    h += '<div class="ex-sum-note">进度提示：「已浏览章节」只保存在当前浏览器中。'
+      + '换设备或清除网站数据后无法自动找回。</div>';
     h += '</div>';
     box.innerHTML = h;
   }
@@ -984,8 +984,13 @@
     log.appendChild(holder);
     log.scrollTop = log.scrollHeight;
 
+    if (window.RG_STATIC_DEMO && window.RgOfflineAi) {
+      holder.innerHTML = aiAnswerHtml(RgOfflineAi.ask(q, c.id, c.primary_event_id));
+      log.scrollTop = log.scrollHeight; return;
+    }
+
     var ok = false;
-    try { ok = !!(b().serviceOk && b().serviceOk()); } catch (e) { ok = false; }
+    try { ok = !!window.RgOfflineAi || !!(b().serviceOk && b().serviceOk()); } catch (e) { ok = false; }
     if (!ok) {
       holder.innerHTML = '<div class="ex-ai-a"><span class="eng none">免费展示版</span>'
         + '在线 AI 问答尚未开放。请阅读本章展陈文字、史料与证据卡。</div>';
