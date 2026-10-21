@@ -1,12 +1,12 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "红色记忆 · 长征贵州段数字展陈平台",
   "short_name": "红色记忆",
-  "description": "红色记忆免费展示版：五章主题展、人物、图谱与资料检索；收藏与进度保存在此浏览器。",
+  "description": "五章主题展、史料检索、关系图谱与双模型全国问答；收藏和进度保存在此浏览器。",
   "lang": "zh-CN",
   "dir": "ltr",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#F7F4EF",
@@ -20,7 +20,7 @@
       "name": "开始参观",
       "short_name": "开始参观",
       "description": "进入「长征贵州段的关键转折」五章主题展",
-      "url": "/#/ex/ex-longmarch-gz/ch-01"
+      "url": "./#/ex/ex-longmarch-gz/ch-01"
     }
   ],
   "icons": [
