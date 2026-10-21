@@ -205,6 +205,17 @@
   }
 
   // ---------------------------------------------------------------- 总库点位渲染
+  function fitVisibleMap() {
+    if (!state.map) return;
+    var container = state.map.getContainer();
+    if (!container || !container.clientWidth || !container.clientHeight) {
+      state.needsFit = true;
+      return;
+    }
+    var overlays = state.markers.concat(state.placeMarkers, state.clusterMarkers);
+    if (overlays.length) state.map.setFitView(overlays, false, [45, 45, 45, 45], 10);
+    state.needsFit = false;
+  }
   /**
    * 渲染总库中的地理点位（革命遗址 / 博物馆纪念馆）。
    * 与 renderNodes 分开管理标记，两类图层可独立开关，互不影响。
@@ -243,7 +254,7 @@
 
     if (state.placeMarkers.length || state.markers.length) {
       setTimeout(function () {
-        state.map.setFitView(null, false, [60, 60, 60, 60]);
+        fitVisibleMap();
       }, 120);
     }
   }
@@ -371,8 +382,8 @@
     // 自适应视野
     if (state.nodes.length) {
       var pts = state.nodes.map(function (n) { return [n.lng, n.lat]; });
-      state.map.setFitView(null, false, [60, 60, 60, 60]);
-      setTimeout(function () { state.map.setFitView(null, false, [60, 60, 60, 60]); }, 320);
+      fitVisibleMap();
+      setTimeout(fitVisibleMap, 320);
     }
   }
 
@@ -629,6 +640,7 @@
     if (state.map && typeof state.map.resize === 'function') {
       try { state.map.resize(); } catch (e) { /* 部分版本无此方法 */ }
     }
+    if (state.map && (state.needsFit || state.map.getZoom() < 5)) fitVisibleMap();
   }
 
   // ---------------------------------------------------------------- 对外接口
