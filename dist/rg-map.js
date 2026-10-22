@@ -63,6 +63,8 @@
   function $(id) { return document.getElementById(id); }
 
   function getKey() {
+    // Managed visitor sites must never use per-browser stale credentials.
+    if(window.RG_MAP_CONFIG_URL){state.key=(window.RG_AMAP_KEY||'').trim();state.sec='';return state.key;}
     try {
       state.key = localStorage.getItem(KEY_LS) || (window.RG_AMAP_KEY || '').trim();
       state.sec = localStorage.getItem(SEC_LS) || (window.RG_AMAP_SEC || '').trim();
@@ -131,19 +133,24 @@
 
   // ---------------------------------------------------------------- 初始化
   function init(containerId) {
+    state.containerId=containerId;
+    if(state.map)return;
     var el = $(containerId);
     if (!el) return;
     if (!getKey()) {
       if (window.RG_MAP_CONFIG_URL && !state.configAttempted) {
         state.configAttempted = true;
-        fetch(window.RG_MAP_CONFIG_URL,{cache:'no-store'})
+        notify('loading');
+        var controller=new AbortController();
+        var configTimer=setTimeout(function(){controller.abort();},12000);
+        fetch(window.RG_MAP_CONFIG_URL,{cache:'no-store',signal:controller.signal})
           .then(function (r) { if (!r.ok) throw Error(); return r.json(); })
           .then(function (c) {
-            if (!c.configured || !c.key || !c.serviceHost) throw Error();
+            if (!c.configured || !c.key || !c.serviceHost) { var missing=Error();missing.notConfigured=true;throw missing; }
             window.RG_AMAP_KEY = c.key;
             window.RG_AMAP_SERVICE_HOST = new URL(c.serviceHost, location.href).href.replace(/\/$/, '');
             init(containerId);
-          }).catch(function () { notify('nokey'); });
+          }).catch(function (error) { state.configAttempted=false;notify(error.notConfigured?'serviceconfig':'servicefail'); }).finally(function(){clearTimeout(configTimer);});
         return;
       }
       // 用户要求只使用高德底图：未配置 Key 时不加载任何免费瓦片，
@@ -187,7 +194,14 @@
       box.style.display = 'none';
       return;
     }
-    if (code === 'nokey') {
+    if (code === 'loading') {
+      html='<b>正在连接地图服务</b><br>访客无需配置密钥，请稍候。';
+    } else if (code === 'servicefail' || code === 'serviceconfig') {
+      html=code==='servicefail'?'<b>暂时无法连接地图服务</b><br>当前网络未能连接平台地图接口。访客无需填写密钥，可稍后重试；点位资料仍可浏览。':'<b>地图服务尚未就绪</b><br>需要平台管理员检查服务端配置，访客无需填写密钥。';
+      html+='<br><button type="button" id="rgMapRetry" class="btn sm">重新连接地图</button>';
+    } else if (code === 'nokey' && window.RG_MAP_CONFIG_URL) {
+      html='<b>地图服务尚未就绪</b><br>访客无需配置密钥，请联系平台管理员。';
+    } else if (code === 'nokey') {
       html = '<b>尚未配置高德地图 Key</b><br>'
         + '请填写 <code>rg-map-config.js</code>，或点「配置地图密钥」填入 Web端(JS API) Key 与安全密钥。'
         + '<br><span style="opacity:.72">未配置时不加载任何免费瓦片，仅显示经纬度点位示意；史实、证据、图谱与 AI 讲解不受影响。</span>';
@@ -202,6 +216,7 @@
     }
     box.innerHTML = html;
     box.style.display = 'block';
+    var retry=document.getElementById('rgMapRetry');if(retry)retry.onclick=function(){state.configAttempted=false;init(state.containerId || 'map');};
   }
 
   // ---------------------------------------------------------------- 总库点位渲染

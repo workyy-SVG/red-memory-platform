@@ -1458,7 +1458,7 @@ video.media-el{outline:none}
           <input id="gSearch" placeholder="搜索实体（如：遵义会议 / 毛泽东）">
           <button class="btn sm" id="gPersonEvent" title="只保留人物、事件、地点及其关系">人物—事件</button>
           <button class="btn sm" id="gFocus">聚焦当前节点</button>
-          <button class="btn sm" id="gAll" style="display:none">展开全部</button>
+          <button class="btn sm" id="gAll" style="display:none">返回主线</button>
           <button class="btn sm" id="gFull">放大查看</button>
           <button class="btn sm" id="gReset">复位</button>
         </div>
@@ -2064,7 +2064,7 @@ function initGraph() {
     if (!st[t]) return;
     var lab = document.createElement('label');
     // 文献、机构默认关闭，避免全量图谱在侧栏里挤成一团；勾选后立即显示
-    var off = (t === 'doc' || t === 'org');
+    var off = (t === 'image' || t === 'org');
     lab.innerHTML = '<input type="checkbox"' + (off ? '' : ' checked') + ' data-gt="' + t + '">'
       + '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'
       + st[t].color + '"></i>' + esc(st[t].label);
@@ -2085,7 +2085,7 @@ function initGraph() {
 
   $('gSearch').addEventListener('input', function () {
     var e = window.RgGraph.focusByKeyword(this.value);
-    if (e) { showGraphEntity(e); graphFocusOff(); }
+    if (e) { showGraphEntity(e); graphFocusOn(1,e.name); }
     else if (!this.value) {
       $('gSel').style.display = 'none';
       window.RgGraph.resetView();
@@ -2159,7 +2159,7 @@ function syncGraphTypeChecks(mode) {
   Array.prototype.forEach.call(box.querySelectorAll('input[data-gt]'), function (el) {
     var t = el.dataset.gt;
     // 全图模式默认也关闭文献/机构，复选框与图谱实际可见类型保持一致
-    var offByDefault = (t === 'doc' || t === 'org');
+    var offByDefault = (t === 'image' || t === 'org');
     var allowed = (mode === 'all')
       ? !offByDefault
       : (t === 'person' || t === 'event' || t === 'place');
@@ -2213,7 +2213,7 @@ function graphFocusOn(count, name) {
   $('gAll').style.display = '';
   $('gFocus').style.display = 'none';
   graphHint('聚焦模式：只显示「' + esc(name || '当前实体') + '」及其直接关联的 <b>' + count
-    + '</b> 个实体。想看全图请点「展开全部」。');
+    + '</b> 个实体。使用「主线」返回时间线；全图请在「全图探索」中放大查看。');
 }
 function graphFocusOff() {
   if (!$('gAll')) return;
@@ -2577,6 +2577,11 @@ function openPerson(ref) {
 }
 
 function onGraphPick(e) {
+  if(e && e.type==='node' && S.nodeById[e.id]) {
+    S.curNode=e.id;renderDetail(S.nodeById[e.id]);
+    if(window.RgMap && window.RgMap.ready())window.RgMap.focusNode(e.id);
+    Array.prototype.forEach.call(document.querySelectorAll('.node-item,.tl-node'),function(el){el.classList.toggle('active',el.dataset.nid===e.id);});
+  }
   showGraphEntity(e);
   if (e && e.type === 'person') openPerson(e.id);
 }
@@ -2805,7 +2810,7 @@ function aiAsk(q) {
     return;
   }
 
-  fetch(SERVICE_BASE + '/api/ai/ask', {
+  visitorServiceFetch(SERVICE_BASE + '/api/ai/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question: q })
@@ -3219,7 +3224,7 @@ function bindEvents() {
   // 卫星
   $('btnSat').addEventListener('click', function () {
     if (!mapApi() || !mapApi().ready()) {
-      setAlert('<b>卫星影像需要高德底图</b>：请先配置高德 Key 并等待底图加载完成；'
+      setAlert('<b>卫星影像暂不可用</b>：真实地图服务尚未连接，请等待加载或点击地图提示中的重新连接。访客无需配置密钥；'
         + '当前的点位示意图无法切换影像。');
       return;
     }
@@ -3278,7 +3283,7 @@ function bindEvents() {
     var el = $('aiKeyStat');
     if (!el) return;
     if (window.RG_STATIC_DEMO) { el.textContent = '史料问答在浏览器中检索；在线 AI 请进入记忆资源中的「全国红色资源」。'; return; }
-    fetch(SERVICE_BASE + '/api/ai/status', { cache: 'no-store' })
+    visitorServiceFetch(SERVICE_BASE + '/api/ai/status', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         el.innerHTML = j && j.configured
@@ -3744,7 +3749,7 @@ function selectedNationalProvider() { return $('anProvider') ? $('anProvider').v
 function nationalProviderName(id) { return id === 'qwen' ? '通义千问' : 'DeepSeek'; }
 function refreshNationalProviderStatus() {
   var el = $('anProviderStatus'), id = selectedNationalProvider(), p = nationalProviders[id];
-  if (el) el.textContent = p ? (p.configured ? ('可用 · 每次仅调用所选 AI' + (nationalQuota ? ' · 今日全站剩余 ' + nationalQuota.remaining + '/' + nationalQuota.limit + ' 次' : '')) : '暂不可用 · 请切换其他 AI 或稍后重试') : '配置状态未知，可尝试检索';
+  if (el) el.textContent = p ? (p.configured ? ('可用 · 每次仅调用所选 AI' + (nationalQuota ? ' · 今日全站剩余 ' + nationalQuota.remaining + '/' + nationalQuota.limit + ' 次' : '')) : '暂不可用 · 请切换其他 AI 或稍后重试') : '服务尚未连接 · 访客无需配置密钥';
 }
 if ($('anProvider')) $('anProvider').addEventListener('change', function () {
   nationalSeq++; // Ignore a prior response if the visitor changes providers mid-request.
@@ -3752,10 +3757,16 @@ if ($('anProvider')) $('anProvider').addEventListener('change', function () {
   if ($('anStatus')) $('anStatus').hidden = true;
   refreshNationalProviderStatus();
 });
+function visitorServiceFetch(url,options) {
+  options=options || {};var controller=new AbortController();
+  var timer=setTimeout(function(){controller.abort();}, /\/ask$/.test(url)?55000:12000);
+  options.signal=controller.signal;
+  return fetch(url,options).finally(function(){clearTimeout(timer);});
+}
 function loadNationalProviders() {
-  fetch(SERVICE_BASE + '/api/ai/status', {cache:'no-store'}).then(function(r){ if(!r.ok) throw Error(); return r.json(); })
+  visitorServiceFetch(SERVICE_BASE + '/api/ai/status', {cache:'no-store'}).then(function(r){ if(!r.ok) throw Error(); return r.json(); })
     .then(function(d){ nationalQuota = d.quota || null; (d.providers || []).forEach(function(p){ nationalProviders[p.id] = p; }); refreshNationalProviderStatus(); })
-    .catch(function(){ refreshNationalProviderStatus(); });
+    .catch(function(){ nationalProviders={};refreshNationalProviderStatus(); });
 }
 loadNationalProviders();
 window.addEventListener('focus',loadNationalProviders);
@@ -3791,7 +3802,7 @@ function nationalAsk(q) {
   nationalBusy = true;
   var seq = ++nationalSeq;
   var requestedProvider = selectedNationalProvider();
-  fetch(SERVICE_BASE + '/api/ai/ask', {
+  visitorServiceFetch(SERVICE_BASE + '/api/ai/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question: q, mode: 'national', provider: requestedProvider })
@@ -3811,8 +3822,7 @@ function nationalAsk(q) {
       if (status) {
         status.hidden = false;
         status.className = 'an-status err';
-        status.textContent = '全国检索调用失败：' + e.message
-          + '。请检查网络连接，或稍后重试。';
+        status.textContent = '全国 AI 服务暂时无法连接或请求超时。访客无需填写密钥；请稍后重试，仍可使用贵州资料检索。';
       }
     });
 }
