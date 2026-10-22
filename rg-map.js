@@ -7,7 +7,7 @@
  *   3. 行军路径动画（按时间顺序连线 + 逐段推进动画）
  *   4. 研学路线的真实路径规划（驾车 / 骑行 / 步行 三种方式）
  *   5. 遗址 / 纪念馆点位聚合
- *   6. 未配置密钥时提示并显示点位示意（不再使用免费瓦片底图）
+ *   6. 联网地图不可用时保留项目自带的可点击离线点位地图
  *
  * 设计说明：
  *   本模块为独立 IIFE，不依赖任何前端框架；对外只暴露 window.RgMap。
@@ -62,9 +62,25 @@
   // ---------------------------------------------------------------- 工具
   function $(id) { return document.getElementById(id); }
 
+  function managedConfigUrl() {
+    // A saved stale rg-map-config.js can still name workers.dev. The published
+    // exhibit has one stable Hong Kong gateway and must use it on every device.
+    if (location.hostname === 'workyy-svg.github.io'
+        && location.pathname.indexOf('/red-memory-platform/') === 0) {
+      return 'https://api.hongsejiyi-demo.fun/api/map/config';
+    }
+    if (window.RG_MAP_CONFIG_URL) return window.RG_MAP_CONFIG_URL;
+    // The public build may restore this script from an older service-worker cache.
+    // Derive the same managed endpoint from the AI base before showing a key prompt.
+    if (window.RG_STATIC_DEMO && /^https:\/\/[^/?#]+$/.test(window.RG_API_BASE || '')) {
+      return window.RG_API_BASE + '/api/map/config';
+    }
+    return '';
+  }
+
   function getKey() {
     // Managed visitor sites must never use per-browser stale credentials.
-    if(window.RG_MAP_CONFIG_URL){state.key=(window.RG_AMAP_KEY||'').trim();state.sec='';return state.key;}
+    if (managedConfigUrl()) {state.key=(window.RG_AMAP_KEY||'').trim();state.sec='';return state.key;}
     try {
       state.key = localStorage.getItem(KEY_LS) || (window.RG_AMAP_KEY || '').trim();
       state.sec = localStorage.getItem(SEC_LS) || (window.RG_AMAP_SEC || '').trim();
@@ -138,12 +154,13 @@
     var el = $(containerId);
     if (!el) return;
     if (!getKey()) {
-      if (window.RG_MAP_CONFIG_URL && !state.configAttempted) {
+      var configUrl = managedConfigUrl();
+      if (configUrl && !state.configAttempted) {
         state.configAttempted = true;
         notify('loading');
         var controller=new AbortController();
         var configTimer=setTimeout(function(){controller.abort();},12000);
-        fetch(window.RG_MAP_CONFIG_URL,{cache:'no-store',signal:controller.signal})
+        fetch(configUrl,{cache:'no-store',signal:controller.signal})
           .then(function (r) { if (!r.ok) throw Error(); return r.json(); })
           .then(function (c) {
             if (!c.configured || !c.key || !c.serviceHost) { var missing=Error();missing.notConfigured=true;throw missing; }
@@ -153,10 +170,9 @@
           }).catch(function (error) { state.configAttempted=false;notify(error.notConfigured?'serviceconfig':'servicefail'); }).finally(function(){clearTimeout(configTimer);});
         return;
       }
-      // 用户要求只使用高德底图：未配置 Key 时不加载任何免费瓦片，
-      // 页面会通过 ready() 为假自动切到经纬度点位示意。
-      state.backend = 'none';
-      notify('nokey');
+      // The public exhibit still has a local, clickable project map without tiles.
+      state.backend = window.RG_STATIC_DEMO ? 'offline' : 'none';
+      notify(window.RG_STATIC_DEMO ? 'offline' : 'nokey');
       return;
     }
     state.backend = 'amap';
@@ -199,11 +215,13 @@
     } else if (code === 'servicefail' || code === 'serviceconfig') {
       html=code==='servicefail'?'<b>暂时无法连接地图服务</b><br>当前网络未能连接平台地图接口。访客无需填写密钥，可稍后重试；点位资料仍可浏览。':'<b>地图服务尚未就绪</b><br>需要平台管理员检查服务端配置，访客无需填写密钥。';
       html+='<br><button type="button" id="rgMapRetry" class="btn sm">重新连接地图</button>';
-    } else if (code === 'nokey' && window.RG_MAP_CONFIG_URL) {
+    } else if (code === 'offline') {
+      html='<b>离线点位地图可用</b><br>已收录的长征节点、遗址和纪念馆可点击查看；在线地图待网络恢复后可重新连接。';
+    } else if (code === 'nokey' && managedConfigUrl()) {
       html='<b>地图服务尚未就绪</b><br>访客无需配置密钥，请联系平台管理员。';
     } else if (code === 'nokey') {
       html = '<b>尚未配置高德地图 Key</b><br>'
-        + '请填写 <code>rg-map-config.js</code>，或点「配置地图密钥」填入 Web端(JS API) Key 与安全密钥。'
+        + '请填写 <code>rg-map-config.js</code>，或点「地图设置」填入 Web端(JS API) Key 与安全密钥。'
         + '<br><span style="opacity:.72">未配置时不加载任何免费瓦片，仅显示经纬度点位示意；史实、证据、图谱与 AI 讲解不受影响。</span>';
     } else if (code === 'clusterfail') {
       html = '<b>遗址聚合暂不可用</b><br>高德聚合插件未能加载，已改回普通点位显示；地图其他功能不受影响。';

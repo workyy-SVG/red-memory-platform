@@ -264,7 +264,11 @@ input{font-family:inherit;font-size:13px}
   position:absolute;inset:0;display:none;background:#FDFBF8;overflow:hidden;z-index:1;
 }
 .map-fallback.on{display:block}
-.map-fallback svg{width:100%;height:100%;display:block}
+.map-fallback svg{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.map-fallback svg:active{cursor:grabbing}
+.mf-actions{position:absolute;right:11px;top:76px;z-index:2;display:flex;flex-direction:column;gap:5px}
+.mf-actions button{width:38px;height:38px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--red);font-size:21px;font-weight:700;cursor:pointer}
+.mf-actions button:focus-visible,.mf-hit:focus-visible{outline:3px solid #286CB0;outline-offset:2px}
 .mf-head{
   position:absolute;left:11px;right:11px;top:9px;z-index:2;
   background:rgba(255,255,255,.95);border:1px solid var(--line);border-left:3px solid var(--red);
@@ -1356,7 +1360,7 @@ video.media-el{outline:none}
         <div><b>纪念馆</b><span>革命类博物馆、纪念馆与陈列馆</span></div>
       </div>
       <div class="an-tip">全国检索回答不写成平台史料；需要核对贵州内容时，切回「贵州专栏」
-        查看 153 条审定资料及其来源。离线或未配置大模型密钥时，本页只提示不可用，不生成替代答案。</div>
+        查看 153 条审定资料及其来源。离线时全国生成式问答暂不可用；可切回「贵州专栏」，根据已收录史料进行资料问答并查看来源。</div>
 
       <div class="an-status" id="anStatus" hidden></div>
       <div class="an-answer" id="anAnswer" aria-live="polite"></div>
@@ -1401,7 +1405,7 @@ video.media-el{outline:none}
       <button class="btn sm" id="btnMarch">行军路径</button>
       <button class="btn sm" id="btnCluster" title="把遗址与纪念馆点位按距离聚合，放大后自动散开">遗址聚合</button>
       <div class="spacer"></div>
-      <button class="btn sm" id="btnKeyCfg">配置地图密钥</button>
+      <button class="btn sm" id="btnKeyCfg">地图设置</button>
     </div>
 
     <div class="map-bar layer-bar">
@@ -1475,7 +1479,7 @@ video.media-el{outline:none}
 
       <div class="pane" id="pane-route">
         <div style="font-size:12.5px;color:var(--ink2);margin-bottom:10px;line-height:1.75">
-          以下研学路线由已标注史料来源的核心节点串联而成。配置高德 Key 后，点击任一线路可按各段标注的交通方式生成真实路网；未配置时只显示直线示意。
+          以下研学路线由已标注史料来源的核心节点串联而成。在线地图连通后，点击任一线路可按各段标注的交通方式生成真实路网；离线点位地图显示直线示意与估算距离。
         </div>
         <div id="routeList"></div>
       </div>
@@ -2733,7 +2737,7 @@ function selectRoute(id) {
       layer.innerHTML = '<path d="' + d + '" fill="none" stroke="#8C1F28" stroke-width="4"'
         + ' stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".92"/>';
       wrap.appendChild(layer);
-      marchProgress('已在示意图上标出「' + r.name + '」：' + list.length + ' 站（配置地图密钥后可看真实路网）');
+      marchProgress('已在离线地图上标出「' + r.name + '」：' + list.length + ' 站（在线地图连通后可看真实路网）');
     }
   }
 }
@@ -2886,6 +2890,7 @@ function renderAiAnswer(d) {
  * 都没进地图」。这里按经纬度把全部点位投影到 SVG 上，只表达相对空间关系，
  * 并明确标注「非真实底图」。配好密钥后自动切回真实地图。 */
 var MAP_B = { lng0: 103.5, lng1: 109.75, lat0: 24.45, lat1: 29.35 };
+var OFFLINE_MAP = { scale: 1, x: 0, y: 0 };
 var CITY_REF = [
   ['贵阳', 106.63, 26.65], ['遵义', 106.92, 27.69], ['毕节', 105.29, 27.30],
   ['铜仁', 109.19, 27.72], ['凯里', 107.98, 26.57], ['都匀', 107.52, 26.26],
@@ -2931,11 +2936,14 @@ function renderFallbackMap() {
   places.forEach(function (p) {
     var col = (p.cat === 'museum') ? '#C08A2E' : '#B3483F';
     var x = mfX(p.lng, W), y = mfY(p.lat, H);
-    s.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.6" fill="' + col
-      + '" stroke="#fff" stroke-width="1" style="cursor:pointer"'
-      + ' onclick="window.RgOnPlaceClick&&window.RgOnPlaceClick(\'' + esc(p.id) + '\')">'
-      + '<title>' + esc((p.cat === 'museum' ? '博物馆纪念馆' : '革命遗址') + '｜' + p.name
-        + (p.place ? '（' + p.place + '）' : '')) + '</title></circle>');
+    var placeTitle=(p.cat === 'museum' ? '博物馆纪念馆' : '革命遗址') + '｜' + p.name
+      + (p.place ? '（' + p.place + '）' : '');
+    s.push('<g class="mf-hit" role="button" tabindex="0" aria-label="' + esc(placeTitle)
+      + '" data-mf-place="' + esc(p.id) + '">'
+      + '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3.6" fill="' + col
+      + '" stroke="#fff" stroke-width="1"/>'
+      + '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="13" fill="transparent"/>'
+      + '<title>' + esc(placeTitle) + '</title></g>');
   });
 
   // 长征节点（大号红点，带序号）
@@ -2943,10 +2951,13 @@ function renderFallbackMap() {
     S.nodes.forEach(function (n, i) {
       if (!n.lng || !n.lat) return;
       var x = mfX(n.lng, W), y = mfY(n.lat, H);
-      s.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="8.5" fill="#8C1F28"'
-        + ' stroke="#fff" stroke-width="2" style="cursor:pointer"'
-        + ' onclick="window.RgOnNodeClick&&window.RgOnNodeClick(\'' + esc(n.id) + '\')">'
-        + '<title>' + esc('长征节点 ' + (n.order || (i + 1)) + '｜' + n.name) + '</title></circle>');
+      var nodeTitle='长征节点 ' + (n.order || (i + 1)) + '｜' + n.name;
+      s.push('<g class="mf-hit" role="button" tabindex="0" aria-label="' + esc(nodeTitle)
+        + '" data-mf-node="' + esc(n.id) + '">'
+        + '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="8.5" fill="#8C1F28"'
+        + ' stroke="#fff" stroke-width="2"/>'
+        + '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="14" fill="transparent"/>'
+        + '<title>' + esc(nodeTitle) + '</title></g>');
       s.push('<text x="' + x.toFixed(1) + '" y="' + (y + 3.4).toFixed(1)
         + '" font-size="9.5" fill="#fff" text-anchor="middle" pointer-events="none">'
         + (n.order || (i + 1)) + '</text>');
@@ -2957,19 +2968,78 @@ function renderFallbackMap() {
   places.forEach(function (p) { if (p.cat === 'museum') nMus++; });
 
   box.innerHTML =
-    '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' + s.join('') + '</svg>'
-    + '<div class="mf-head"><b>点位分布示意 · 地图底图暂未启用</b><br>'
+    '<svg id="rgOfflineSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" aria-label="贵州段离线点位地图，可拖动及点击地点">' + s.join('') + '</svg>'
+    + '<div class="mf-head"><b>贵州段离线点位地图</b><br>'
     + '当前显示 ' + (S.mapLayer.node ? S.nodes.length : 0) + ' 个长征节点 · '
     + (places.length - nMus) + ' 处革命遗址 · ' + nMus + ' 家博物馆纪念馆。'
-    + '可点击点位阅读资料。当前不提供真实道路导航，路线距离为估算。'
+    + '可点击点位阅读资料，拖动与缩放查看位置；在线底图恢复后会自动切换。路线距离为估算。'
     + '</div>'
+    + '<div class="mf-actions" aria-label="离线地图缩放">'
+    + '<button type="button" data-mf-zoom="in" aria-label="放大离线地图">+</button>'
+    + '<button type="button" data-mf-zoom="out" aria-label="缩小离线地图">−</button>'
+    + '<button type="button" data-mf-zoom="reset" aria-label="恢复地图全景">⌖</button></div>'
     + '<div class="mf-lg">'
     + '<span><i style="background:#8C1F28"></i>长征节点</span>'
     + '<span><i style="background:#B3483F"></i>革命遗址</span>'
     + '<span><i style="background:#C08A2E"></i>博物馆·纪念馆</span>'
     + '<span><i style="background:#CFC2B2;border-radius:1px"></i>地市参照</span>'
     + '</div>'
-    + '<div class="mf-note">非真实底图 · 仅示意相对位置（点击圆点可打开条目）</div>';
+    + '<div class="mf-note">离线示意地图 · 不含道路与卫星影像</div>';
+
+  var svg=$('rgOfflineSvg');
+  function clamp(n, low, high) { return Math.max(low, Math.min(high, n)); }
+  function applyView() {
+    var vw=W/OFFLINE_MAP.scale, vh=H/OFFLINE_MAP.scale;
+    OFFLINE_MAP.x=clamp(OFFLINE_MAP.x,0,W-vw);
+    OFFLINE_MAP.y=clamp(OFFLINE_MAP.y,0,H-vh);
+    svg.setAttribute('viewBox',OFFLINE_MAP.x+' '+OFFLINE_MAP.y+' '+vw+' '+vh);
+  }
+  function zoom(factor) {
+    var vw=W/OFFLINE_MAP.scale, vh=H/OFFLINE_MAP.scale;
+    var cx=OFFLINE_MAP.x+vw/2, cy=OFFLINE_MAP.y+vh/2;
+    OFFLINE_MAP.scale=clamp(OFFLINE_MAP.scale*factor,1,4);
+    OFFLINE_MAP.x=cx-W/OFFLINE_MAP.scale/2;
+    OFFLINE_MAP.y=cy-H/OFFLINE_MAP.scale/2;
+    applyView();
+  }
+  applyView();
+  Array.prototype.forEach.call(box.querySelectorAll('[data-mf-zoom]'),function(btn){
+    btn.addEventListener('click',function(){
+      var mode=btn.getAttribute('data-mf-zoom');
+      if(mode==='reset'){OFFLINE_MAP.scale=1;OFFLINE_MAP.x=0;OFFLINE_MAP.y=0;applyView();}
+      else zoom(mode==='in'?1.5:1/1.5);
+    });
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-mf-place],[data-mf-node]'),function(point){
+    function open(){
+      var id=point.getAttribute('data-mf-place');
+      if(id){if(window.RgOnPlaceClick)window.RgOnPlaceClick(id);}
+      else if(window.RgOnNodeClick)window.RgOnNodeClick(point.getAttribute('data-mf-node'));
+    }
+    point.addEventListener('click',open);
+    point.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open();}});
+  });
+  var drag=null, moved=false;
+  svg.addEventListener('pointerdown',function(ev){
+    if(ev.button && ev.button!==0)return;
+    drag={id:ev.pointerId,x:ev.clientX,y:ev.clientY,startX:OFFLINE_MAP.x,startY:OFFLINE_MAP.y};
+    moved=false;
+    try{svg.setPointerCapture(ev.pointerId);}catch(e){}
+  });
+  svg.addEventListener('pointermove',function(ev){
+    if(!drag||ev.pointerId!==drag.id||OFFLINE_MAP.scale===1)return;
+    var bounds=svg.getBoundingClientRect();
+    if(!bounds.width||!bounds.height)return;
+    if(Math.abs(ev.clientX-drag.x)+Math.abs(ev.clientY-drag.y)>6)moved=true;
+    OFFLINE_MAP.x=drag.startX-(ev.clientX-drag.x)*(W/OFFLINE_MAP.scale)/bounds.width;
+    OFFLINE_MAP.y=drag.startY-(ev.clientY-drag.y)*(H/OFFLINE_MAP.scale)/bounds.height;
+    applyView();
+  });
+  function endDrag(ev){if(drag&&ev.pointerId===drag.id)drag=null;}
+  svg.addEventListener('pointerup',endDrag);
+  svg.addEventListener('pointercancel',endDrag);
+  svg.addEventListener('click',function(ev){if(moved){ev.preventDefault();ev.stopImmediatePropagation();moved=false;}},true);
+  svg.addEventListener('wheel',function(ev){ev.preventDefault();zoom(ev.deltaY<0?1.25:1/1.25);},{passive:false});
 
   // 无密钥时不显示居中的引导弹层，避免与示意图重叠
   var tip = $('mapTip');
@@ -3215,7 +3285,7 @@ function bindEvents() {
   $('btnFit').addEventListener('click', function () {
     stopMarch();
     if (mapApi() && mapApi().ready()) mapApi() && mapApi().renderNodes(S.nodes);
-    else renderFallbackMap();
+    else { OFFLINE_MAP.scale=1;OFFLINE_MAP.x=0;OFFLINE_MAP.y=0;renderFallbackMap(); }
   });
   $('marchSpeed').addEventListener('change', function () {
     S.marchSpeed = Number(this.value) || 900;
@@ -3235,7 +3305,7 @@ function bindEvents() {
   // 遗址 / 纪念馆聚合
   $('btnCluster').addEventListener('click', function () {
     if (!mapApi() || !mapApi().ready()) {
-      setAlert('<b>遗址聚合需要高德底图</b>：请先配置高德 Key；未配置时总库仍可按类别浏览全部点位。');
+      setAlert('<b>遗址聚合需要在线地图</b>：请联网后重新连接；离线点位地图仍可按类别浏览已收录地点。');
       return;
     }
     var on = !this.classList.contains('on');
@@ -3250,7 +3320,9 @@ function bindEvents() {
   });
 
   // 密钥配置
+  if (window.RG_STATIC_DEMO) $('btnKeyCfg').textContent='重新连接在线地图';
   $('btnKeyCfg').addEventListener('click', function () {
+    if (window.RG_STATIC_DEMO) { reloadMap(); return; }
     var row = $('mapKeyRow');
     var show = row.style.display !== 'flex';
     row.style.display = show ? 'flex' : 'none';
@@ -3994,7 +4066,7 @@ function renderAtlasOverview() {
     setView('topic');
     setTimeout(function () {
       if (!mapApi() || !mapApi().ready()) {
-        setAlert('<b>地图底图暂未启用</b>：当前可通过点位示意浏览地点与资料。');
+        setAlert('<b>在线地图尚未连接</b>：当前可通过离线点位地图浏览地点与资料。');
         return;
       }
       applyMapLayers();
@@ -4888,7 +4960,17 @@ if (document.readyState === 'loading') {
   if (!/^https?:$/.test(location.protocol) || !('serviceWorker' in navigator)) return;
 
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    // A newly activated worker must replace scripts still served from the previous offline cache.
+    var wasControlled = !!navigator.serviceWorker.controller;
+    var refreshed = false;
+    if (wasControlled) navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (refreshed) return;
+      refreshed = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(function (registration) {
+      registration.update().catch(function () {});
+    }).catch(function () {});
   });
 
   // 已在独立窗口/主屏打开时不打扰
@@ -5053,6 +5135,11 @@ if (document.readyState === 'loading') {
         var tb = document.querySelector('#viewSeg button[data-view="topic"]');
         if (tb) tb.click();
       }
+      // 手机上底部「讲解」直接打开可提问的 AI 面板；事件列表点选则保留事件详情。
+      if (k === 'detail') {
+        var aiTab = document.querySelector('#tabs button[data-tab="ai"]');
+        if (aiTab) aiTab.click();
+      }
       resizeAll();
     }
   }
@@ -5105,6 +5192,8 @@ if (document.readyState === 'loading') {
       if (isAtlas() || isExhibit() || current === 'detail') return;
       var pickedNew = fromMap && activeNodeId() !== before && !!activeNodeId();
       if (fromList || pickedNew) {
+        var detailTab = document.querySelector('#tabs button[data-tab="detail"]');
+        if (detailTab) detailTab.click();
         current = 'detail';
         body.setAttribute('data-mtab', 'detail');
         activate('detail');

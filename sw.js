@@ -1,8 +1,13 @@
-const CACHE='red-memory-github-map-20261022-v6';
+const CACHE='red-memory-github-map-20261022-v7';
 const BASE=new URL('./',self.location.href).pathname;
 const HOME=new URL('./',self.location.href).href;
 const SHELL=["./", "./manifest.json", "./public.css", "./public-bridge.js", "./public-ui.js", "./demo-v2.css", "./demo-v2.js", "./rg-map-config.js", "./rg-app-config.js", "./rg-map.js", "./rg-graph.js", "./rg-exhibition.js", "./rg-exhibition.css", "./rg-story.js", "./rg-story.css", "./icons/icon-192.png", "./icons/icon-512.png", "./media/exhibition/zunyi-site.jpg", "./media/exhibition/chishui-river.jpg", "./media/exhibition/sdcsjng-hall.jpg", "./media/exhibition/loushanguan-1967.jpg", "./media/site_dengping_mu__01_front.jpg", "./media/site_dengping_mu__02_marker.jpg", "./media/site_dengping_mu__03_left.jpg", "./media/site_dengping_mu__04_right.jpg", "./media/img_dengping_mu__01_front.jpg", "./media/img_dengping_mu__02_marker.jpg", "./media/img_dengping_mu__03_left.jpg", "./media/img_dengping_mu__04_right.jpg", "./media/site_zunyi_huiyi__01.jpg", "./media/site_zunyi_huiyi__02.jpg", "./media/site_zunyi_huiyi__03.jpg", "./media/site_zunyi_huiyi__04.jpg", "./media/site_zunyi_huiyi__05.jpg", "./media/site_zunyi_huiyi__06.jpg", "./media/site_wangruofei_gu__01.jpg", "./media/site_wangruofei_gu__02.jpg", "./media/site_wangruofei_gu__03.jpg", "./media/site_hepingcun__01.jpg", "./media/site_hepingcun__02.jpg", "./media/site_24daoguang__01.jpg", "./media/museums/mus_gzsbwg.jpg", "./media/museums/mus_gzsmzbwg.jpg", "./media/museums/mus_zybwg.jpg", "./media/people/per_cheyaoxian.jpg", "./media/people/per_dengenming.jpg", "./media/people/per_liumeisheng.jpg", "./media/people/per_longdadao.jpg", "./media/people/per_luoshiwen.jpg", "./media/people/per_songzhenzhong.jpg", "./media/people/per_wangruofei.jpg", "./media/museums/mus_hepingcun_cl.jpg", "./media/per_songzhenzhong__02.jpg", "./media/mus_hepingcun_cl__02.jpg", "./media/people/per_yanghucheng.jpg", "./media/people/per_zhou_suyuan.jpg", "./media/people/per_zhouyiqun.jpg", "./media/people/p_guoxunqi.jpg", "./media/people/p_wangjialiang.jpg", "./media/people/p_guanxiangying.jpg", "./media/people/p_renbishi.jpg", "./media/people/p_helong.jpg", "./media/people/p_zhangwentian.jpg", "./media/people/p_zhouenlai.jpg", "./media/people/p_maozedong.jpg", "./media/people/per_luruiguang.jpg", "./media/people/p_dengping.jpg", "./media/people/p_yangshangkun.jpg", "./media/people/p_nieorongzhen.jpg", "./media/people/p_pengdehuai.jpg", "./media/people/p_lide.jpg", "./media/people/p_bogu.jpg", "./media/people/p_zhude.jpg", "./media/people/p_wangjiaxiang.jpg", "./rg-offline-ai.js"];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>Promise.all(SHELL.map(u=>c.add(new URL(u,self.location.href).href).catch(()=>{})))).then(()=>self.skipWaiting())));
+const CORE=['./','./rg-app-config.js','./rg-map-config.js','./rg-map.js','./rg-offline-ai.js','./rg-exhibition.js','./rg-graph.js','./public.css','./public-ui.js','./public-bridge.js','./demo-v2.js'];
+const NETWORK_FIRST=new Set(['rg-app-config.js','rg-map-config.js','rg-map.js','rg-offline-ai.js','rg-exhibition.js']);
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(async c=>{
+ await Promise.all(CORE.map(u=>c.add(new URL(u,self.location.href).href)));
+ await Promise.all(SHELL.filter(u=>!CORE.includes(u)).map(u=>c.add(new URL(u,self.location.href).href).catch(()=>{})));
+}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('red-memory-github-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
  const req=e.request,u=new URL(req.url);
@@ -12,5 +17,8 @@ self.addEventListener('fetch',e=>{
   e.respondWith(fetch(req).then(async r=>{if(r.ok){const c=await caches.open(CACHE);await c.put(HOME,r.clone())}return r}).catch(async()=>await caches.match(HOME)||new Response('请首次联网打开红色记忆',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}})));return;
  }
  if(!/\.(js|css|png|jpg|jpeg|webp|svg|ico|json)$/.test(u.pathname))return;
+ if(NETWORK_FIRST.has(u.pathname.slice(BASE.length))){
+  e.respondWith((async()=>{const cache=await caches.open(CACHE);try{const r=await fetch(req);if(r.ok){await cache.put(req,r.clone());return r}return await cache.match(req,{ignoreSearch:true})||r}catch{return await cache.match(req,{ignoreSearch:true})||new Response('',{status:503})}})());return;
+ }
  e.respondWith((async()=>{const cache=await caches.open(CACHE);const hit=await cache.match(req,{ignoreSearch:true});if(hit)return hit;try{const r=await fetch(req);if(r.ok)await cache.put(req,r.clone());return r}catch{return new Response('',{status:503})}})());
 });
