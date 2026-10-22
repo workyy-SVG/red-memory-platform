@@ -453,7 +453,7 @@ input{font-family:inherit;font-size:13px}
 .dm-t{flex:1 1 auto;min-width:0}
 .dm-t .n{font-size:12.5px;font-weight:700;color:var(--red)}
 .dm-t .d{font-size:11.5px;color:var(--ink3);margin-top:2px;line-height:1.6}
-.dm-t .d.warn{color:var(--gold)}
+.dm-t .d.warn{color:var(--ink2);white-space:pre-wrap}
 
 /* 图谱 */
 .graph-tools{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:0 0 9px;border-bottom:1px solid var(--line2);margin-bottom:9px}
@@ -1324,9 +1324,9 @@ video.media-el{outline:none}
     <div class="an-wrap">
       <div class="an-head">
         <div class="an-kicker">全国红色资源 · AI 检索</div>
-        <h2>贵州之外的人物、事迹与遗址，也能查</h2>
-        <p>贵州专栏收录 <b id="anGzCount">153</b> 条经平台整理的审定资料。省外内容不在本地史料库中，
-          由大模型依据公开知识补充回答；答案标注「AI 生成 · 未经平台史料核验」，
+        <h2>全国革命历史人物、事件与遗址都可以问</h2>
+        <p>这里使用你选定的在线 AI 回答全国问题，包括贵州和其他省份。贵州专栏另收录 <b id="anGzCount">153</b> 条经平台整理的审定资料；
+          省外内容不在本地史料库中，由大模型依据公开知识补充回答。答案标注「AI 生成 · 未经平台史料核验」，
           不挂平台出处。涉及出处、日期与数字时，请以权威史料和纪念馆官方发布为准。</p>
       </div>
 
@@ -1345,6 +1345,7 @@ video.media-el{outline:none}
       </form>
       <div class="an-chips" id="anChips" aria-label="示例检索">
         <span>试试：</span>
+        <button type="button" data-an-q="抗日战争">抗日战争</button>
         <button type="button" data-an-q="井冈山革命根据地">井冈山</button>
         <button type="button" data-an-q="赵一曼">赵一曼</button>
         <button type="button" data-an-q="西柏坡">西柏坡</button>
@@ -1485,7 +1486,7 @@ video.media-el{outline:none}
       </div>
 
       <div class="pane" id="pane-ai">
-        <div class="ai-tip" id="aiTip"><b>史料问答：</b>在本平台收录的资料中检索作答，并显示来源；未命中时明确提示未收录。需要全国知识补充时，请进入「记忆资源 → 全国红色资源」，选择 DeepSeek 或通义千问。AI 生成内容会单独标注未经核验。</div>
+        <div class="ai-tip" id="aiTip"><b>贵州史料问答：</b>此处只检索平台收录的贵州资料并显示来源；资料未收录或要问全国主题（如抗日战争），可点击回答下方的「去全国红色资源继续问」，再选择 DeepSeek 或通义千问。全国 AI 生成内容会标注未经核验。</div>
         <div class="ai-keybar">
           <span id="aiKeyStat">大模型：检测中…</span>
         </div>
@@ -1782,8 +1783,10 @@ function renderDetail(n) {
   h += '<div class="dm-box">'
     + '<div class="dm-avatar" id="dmAvatar"></div>'
     + '<div class="dm-t"><div class="n">虚拟讲解员 · 小忆</div>'
-    + '<div class="d" id="dmText">点击下方按钮，由虚拟讲解员朗读本节点讲解词</div></div>'
-    + '<button class="btn sm" id="dmBtn">开始讲解</button>'
+    + '<div class="d" id="dmText" role="status" aria-live="polite">' + (dmCanSpeak()
+      ? '点击按钮，朗读本节点讲解词'
+      : '当前浏览器没有语音朗读功能；点「查看讲解词」可阅读完整文字。') + '</div></div>'
+    + '<button class="btn sm" id="dmBtn">' + (dmCanSpeak() ? '开始讲解' : '查看讲解词') + '</button>'
     + '</div>';
 
   h += '<div class="sec-t">事件概述</div>'
@@ -1912,6 +1915,9 @@ function dmChunks(text) {
   return out;
 }
 /* 优先选中文语音；部分浏览器首次 getVoices() 为空，等 voiceschanged 后再取 */
+function dmCanSpeak() {
+  return !!(window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function');
+}
 function dmPickVoice() {
   try {
     var vs = window.speechSynthesis.getVoices() || [];
@@ -1931,7 +1937,7 @@ function stopSpeakNode(msg) {
   try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { /* 忽略 */ }
   var avatar = $('dmAvatar'), txtEl = $('dmText'), btn = $('dmBtn');
   if (avatar) avatar.classList.remove('speaking');
-  if (btn) btn.textContent = '开始讲解';
+  if (btn) btn.textContent = dmCanSpeak() ? '开始讲解' : '查看讲解词';
   if (msg && txtEl) { txtEl.className = 'd'; txtEl.textContent = msg; }
 }
 
@@ -1940,21 +1946,21 @@ function speakNode(n) {
   var txtEl = $('dmText');
   var btn = $('dmBtn');
 
-  if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') {
-    if (txtEl) {
-      txtEl.className = 'd warn';
-      txtEl.textContent = '当前浏览器不支持语音合成，讲解词已在上方「事件概述」中以文字呈现。';
-    }
-    return;
-  }
-  if (S.speaking) { stopSpeakNode('讲解已停止。'); return; }
-
   var lines = ['下面讲解' + n.name + '。'];
   if (n.date_label) lines.push('时间：' + n.date_label + '。');
   if (n.place) lines.push('地点：' + n.place + '。');
   if (n.summary) lines.push(n.summary);
   if (n.facts && n.facts.length && n.facts[0].text) lines.push(n.facts[0].text);
-  lines.push('以上内容均出自平台收录的审定史料，详细信息请在右侧史料记载中查看出处标注。');
+  lines.push('以上内容均出自平台收录的审定史料，详细信息请在下方史料记载中查看出处标注。');
+
+  if (!dmCanSpeak()) {
+    if (txtEl) {
+      txtEl.className = 'd warn';
+      txtEl.textContent = '当前浏览器没有语音朗读功能。讲解词如下：\n' + lines.join('\n');
+    }
+    return;
+  }
+  if (S.speaking) { stopSpeakNode('讲解已停止。'); return; }
 
   var chunks = dmChunks(lines.join(''));
   if (!chunks.length) return;
@@ -1979,8 +1985,9 @@ function speakNode(n) {
     if (avatar) avatar.classList.remove('speaking');
     if (btn) btn.textContent = '开始讲解';
     if (txtEl) {
-      txtEl.className = 'd';
-      txtEl.textContent = msg || '讲解完毕。讲解词全部由节点史实文本生成，未作任何演绎。';
+      txtEl.className = msg ? 'd warn' : 'd';
+      txtEl.textContent = msg ? (msg + '\n' + lines.join('\n'))
+        : '讲解完毕。讲解词全部由节点史实文本生成，未作任何演绎。';
     }
   }
 
@@ -2015,12 +2022,12 @@ function speakNode(n) {
       if (token !== S.speakToken) return;
       var e = ev && ev.error;
       if (e === 'interrupted' || e === 'canceled') return;  // 正常的停止/切换，不算失败
-      finish('语音合成未能继续（' + (e || '未知原因') + '）。讲解词已在上方文字中完整呈现。');
+      finish('语音合成未能继续（' + (e || '未知原因') + '）。以下是完整讲解词：');
     };
     try {
       synth.speak(u);
     } catch (e2) {
-      finish('当前浏览器未能启动语音合成，讲解词已在上方文字中呈现。');
+      finish('当前浏览器未能启动语音合成。以下是完整讲解词：');
       return;
     }
     // 看门狗：每一段单独计时。浏览器可能吞掉中间某一段的 speak()，
@@ -2030,7 +2037,7 @@ function speakNode(n) {
       if (token !== S.speakToken || !S.speaking || chunkStarted) return;
       stalls++;
       if (stalls >= 3) {
-        finish('语音没有启动：请在系统设置中安装中文语音包，或直接阅读上方文字。');
+        finish('语音没有启动：请检查浏览器或系统语音设置。以下是完整讲解词：');
         return;
       }
       try { synth.cancel(); } catch (e4) { /* 忽略 */ }
@@ -2802,6 +2809,7 @@ function aiAsk(q) {
 
   if (window.RG_STATIC_DEMO && window.RgOfflineAi) {
     holder.innerHTML = renderAiAnswer(RgOfflineAi.ask(q));
+    offerNationalAsk(holder, q);
     log.scrollTop = log.scrollHeight; return;
   }
   if (!SERVICE_OK) {
@@ -2810,6 +2818,7 @@ function aiAsk(q) {
       answer: '免费展示版尚未接入在线 AI。'
         + '可继续阅读展览文字、来源记录与人物资料。'
     });
+    offerNationalAsk(holder, q);
     log.scrollTop = log.scrollHeight;
     return;
   }
@@ -2822,6 +2831,7 @@ function aiAsk(q) {
     .then(function (r) { return r.json(); })
     .then(function (d) {
       holder.innerHTML = renderAiAnswer(d);
+      offerNationalAsk(holder, q);
       log.scrollTop = log.scrollHeight;
     })
     .catch(function (e) {
@@ -2829,8 +2839,34 @@ function aiAsk(q) {
         engine: 'error',
         answer: '讲解服务暂不可用，请恢复连接后重试。'
       });
+      offerNationalAsk(holder, q);
       log.scrollTop = log.scrollHeight;
     });
+}
+
+function openNationalQuestion(question) {
+  setView('atlas');
+  setAtlasScope('national');
+  var input = $('anQ');
+  if (!input) return;
+  input.value = question;
+  requestAnimationFrame(function () {
+    input.scrollIntoView({ block: 'center' });
+    input.focus();
+  });
+}
+
+function offerNationalAsk(holder, question) {
+  var row = document.createElement('div');
+  row.className = 'ai-national-link';
+  row.style.marginTop = '8px';
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn xs';
+  button.textContent = '带着这个问题去全国红色资源继续问';
+  button.addEventListener('click', function () { openNationalQuestion(question); });
+  row.appendChild(button);
+  holder.appendChild(row);
 }
 
 function renderAiAnswer(d) {
