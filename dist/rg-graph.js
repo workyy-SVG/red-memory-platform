@@ -423,6 +423,7 @@
     if (G.bound) return;       // 同一 canvas 重复 init 时不叠加事件
     G.bound = true;
     var c = G.canvas;
+    c.style.touchAction = 'none';   // 画布内单指拖动/双指缩放，不触发浏览器手势
 
     c.addEventListener('mousemove', function (ev) {
       var rect = c.getBoundingClientRect();
@@ -484,7 +485,71 @@
       draw();
     }, { passive: false });
 
-    c.addEventListener('touchend',function(ev){if(!ev.changedTouches.length)return;var t=ev.changedTouches[0],rect=c.getBoundingClientRect();var hit=hitTest(t.clientX-rect.left,t.clientY-rect.top);if(hit){ev.preventDefault();pickNarrative(hit);}}, {passive:false});
+    // 移动端触摸：单指拖拽节点/平移画布，双指缩放；轻点（未拖动）才视为点选
+    c.addEventListener('touchstart', function (ev) {
+      ev.preventDefault();
+      var rect = c.getBoundingClientRect();
+      G.touchMoved = false;
+      if (ev.touches.length === 1) {
+        var t = ev.touches[0];
+        var mx = t.clientX - rect.left, my = t.clientY - rect.top;
+        var hit = hitTest(mx, my);
+        if (hit) { G.dragNode = hit; G.selected = hit.id; }
+        else { G.panning = true; G.lastTouch = { x: mx, y: my }; }
+      } else if (ev.touches.length === 2) {
+        var a = ev.touches[0], b = ev.touches[1];
+        var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+        G.pinchStart = {
+          dist: Math.max(1, Math.sqrt(dx * dx + dy * dy)),
+          midX: (a.clientX + b.clientX) / 2 - rect.left,
+          midY: (a.clientY + b.clientY) / 2 - rect.top,
+          scale: G.scale, ox: G.ox, oy: G.oy
+        };
+        G.dragNode = null; G.panning = false;
+      }
+      draw();
+    }, { passive: false });
+
+    c.addEventListener('touchmove', function (ev) {
+      ev.preventDefault();
+      var rect = c.getBoundingClientRect();
+      if (ev.touches.length === 2 && G.pinchStart) {
+        var a = ev.touches[0], b = ev.touches[1];
+        var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var factor = dist / G.pinchStart.dist;
+        G.scale = Math.max(0.2, Math.min(3.2, G.pinchStart.scale * factor));
+        G.ox = G.pinchStart.midX - (G.pinchStart.midX - G.pinchStart.ox) * (G.scale / G.pinchStart.scale);
+        G.oy = G.pinchStart.midY - (G.pinchStart.midY - G.pinchStart.oy) * (G.scale / G.pinchStart.scale);
+        G.touchMoved = true;
+        draw();
+        return;
+      }
+      if (ev.touches.length !== 1) return;
+      var t = ev.touches[0];
+      var mx = t.clientX - rect.left, my = t.clientY - rect.top;
+      if (G.dragNode) {
+        G.dragNode.gx = (mx - G.ox) / G.scale;
+        G.dragNode.gy = (my - G.oy) / G.scale;
+        G.touchMoved = true;
+        draw();
+      } else if (G.panning && G.lastTouch) {
+        G.ox += mx - G.lastTouch.x;
+        G.oy += my - G.lastTouch.y;
+        G.lastTouch = { x: mx, y: my };
+        G.touchMoved = true;
+        draw();
+      }
+    }, { passive: false });
+
+    c.addEventListener('touchend', function (ev) {
+      if (ev.touches.length === 0) { G.dragNode = null; G.panning = false; G.pinchStart = null; }
+      if (!ev.changedTouches.length || G.touchMoved) { G.touchMoved = false; return; }
+      var t = ev.changedTouches[0];
+      var rect = c.getBoundingClientRect();
+      var hit = hitTest(t.clientX - rect.left, t.clientY - rect.top);
+      if (hit) { ev.preventDefault(); pickNarrative(hit); }
+    }, { passive: false });
     c.addEventListener('dblclick', function () { resetView(); });
   }
 
