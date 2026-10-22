@@ -21,7 +21,7 @@
 
   var TYPE_STYLE = {
     node:   { color: '#8C1F28', label: '平台节点', r: 17 },
-    event:  { color: '#B33A2B', label: '事件',     r: 14 },
+    event:  { color: '#CD792D', label: '事件',     r: 14 },
     person: { color: '#2E6FA8', label: '人物',     r: 12 },
     place:  { color: '#1F6F5C', label: '地点/遗址', r: 11 },
     doc:    { color: '#7A5BA6', label: '文献',     r: 10 },
@@ -50,6 +50,92 @@
     bound: false,
     onResize: null
   };
+
+
+  // Display policy is independent of the source graph: no historical edges are inferred.
+  function visible(e) {
+    return !!G.visibleTypes[e.type] && (G.mode === 'main' ? e.type === 'node'
+      : G.mode === 'focus' ? !!(G.focusSet && G.focusSet[e.id]) : true);
+  }
+  function mainNodes() {
+    // The curated source order also handles date ranges such as 四渡赤水.
+    return G.entities.filter(function(e){return e.type === 'node';});
+  }
+  function narrativeLayout() {
+    var nodes=mainNodes(), narrow=G.W < 620;
+    nodes.forEach(function(e,i){e.gx=narrow ? 450 : 90+i*90;
+      e.gy=narrow ? 55+i*90 : 280+(i%2)*65;});
+    G.laidOut=true;
+  }
+  function fitVisible() {
+    var set={};G.entities.forEach(function(e){if(visible(e))set[e.id]=true;});
+    fitToFocus(set);
+  }
+  function updateNarrativeUI() {
+    var bar=document.getElementById('rgGraphViews');if(!bar)return;
+    Array.prototype.forEach.call(bar.querySelectorAll('[data-graph-view]'),function(b){
+      b.setAttribute('aria-pressed',String(b.dataset.graphView===G.mode));
+    });
+    var status=bar.querySelector('[role="status"]');
+    var count=G.entities.filter(visible).length;
+    status.textContent=(G.mode==='main'?'主线':G.mode==='focus'?'聚焦':'全图')+' · '+count+' 个实体；勾选类型参与显示。红色箭头表示已有时序关系，橙色为包含，蓝色为参与/指挥，绿色为发生于。';
+    var list=document.getElementById('rgGraphNodeList');list.textContent='';
+    (G.mode==='main'?mainNodes():G.entities.filter(visible)).forEach(function(e){
+      var b=document.createElement('button');b.type='button';b.className='btn xs';
+      b.textContent=e.name;b.onclick=function(){pickNarrative(e);};list.appendChild(b);
+    });
+    list.style.display=G.W<620?'flex':'none';
+  }
+  function stopStory(){if(G.storyTimer)clearInterval(G.storyTimer);G.storyTimer=null;}
+  function viewMode(mode,approved) {
+    stopStory();
+    if(mode==='main' && !mainNodes().length)mode='focus';
+    if(mode==='all'){
+      if(window.innerWidth<760){mode='focus';}
+      else if(!approved && !window.confirm('全图包含 '+G.entities.length+' 个实体，关系较密。是否放大进入探索？'))return;
+      else {
+        var wrap=document.getElementById('gWrap');if(wrap)wrap.classList.add('expanded');
+        var scrim=document.getElementById('gScrim');if(scrim)scrim.classList.add('show');
+        var full=document.getElementById('gFull');if(full)full.textContent='退出放大';
+      }
+    }
+    G.mode=mode;
+    if(mode==='focus')return focusSubgraph(G.selected || (mainNodes()[0]||G.entities[0]||{}).id,2);
+    G.focusSet=null;G.hover=null;
+    if(mode==='main')narrativeLayout();else layout(180);
+    resize();fitVisible();draw();updateNarrativeUI();
+  }
+  function pickNarrative(e){
+    stopStory();G.selected=e.id;
+    if(G.onPick)G.onPick(e);
+    focusSubgraph(e.id,2);
+  }
+  function installNarrativeUI(){
+    if(document.getElementById('rgGraphViews'))return;
+    var bar=document.createElement('div');bar.id='rgGraphViews';
+    bar.style.cssText='padding:10px;display:flex;gap:7px;flex-wrap:wrap;background:#fff9ef';
+    [['main','主线'],['focus','聚焦'],['all','全图探索']].forEach(function(pair){
+      var b=document.createElement('button');b.type='button';b.className='btn xs';
+      b.dataset.graphView=pair[0];b.textContent=pair[1];b.onclick=function(){viewMode(pair[0]);};bar.appendChild(b);
+    });
+    var play=document.createElement('button');play.type='button';play.className='btn xs';play.textContent='播放叙事主线';
+    play.onclick=function(){
+      if(G.storyTimer){stopStory();return;}
+      viewMode('main');var nodes=mainNodes(),i=0;
+      function next(){if(i>=nodes.length){stopStory();return;}var e=nodes[i++];
+        G.selected=e.id;if(G.onPick)G.onPick(e);G.mode='main';G.focusSet=null;narrativeLayout();fitVisible();draw();updateNarrativeUI();}
+      next();G.storyTimer=setInterval(next,1600);
+    };bar.appendChild(play);
+    var status=document.createElement('span');status.setAttribute('role','status');status.style.cssText='width:100%;font-size:12px;color:#735c49';bar.appendChild(status);
+    G.canvas.parentNode.parentNode.insertBefore(bar,G.canvas.parentNode);
+    var list=document.createElement('div');list.id='rgGraphNodeList';list.setAttribute('aria-label','图谱实体列表');
+    list.style.cssText='gap:6px;flex-wrap:wrap;max-height:180px;overflow:auto;padding:8px';
+    bar.appendChild(list);
+    ['gAll','gReset'].forEach(function(id){var b=document.getElementById(id);if(b)b.addEventListener('click',function(ev){ev.stopImmediatePropagation();viewMode('main');},true);});
+    document.addEventListener('click',function(ev){var b=ev.target.closest && ev.target.closest('#gFull,#gScrim');
+      if(b && G.mode==='all')setTimeout(function(){var w=document.getElementById('gWrap');if(w&&!w.classList.contains('expanded'))viewMode('main');},80);
+    });
+  }
 
   // ------------------------------------------------------------ 力导向布局
   function layout(iterations) {
@@ -167,11 +253,11 @@
 
   /** 标签降噪：全图只给"枢纽实体 + 关键类型"常显标签，其余按缩放显示 */
   function shouldShowLabel(e, dim) {
-    if (dim) return false;
+    if (!visible(e) || dim) return false;
     if (e.id === G.hover || e.id === G.selected) return true;
     // 悬停时把该实体的一跳邻居一并标名，便于顺着关系读图
     if (G.hover) return true;
-    if (G.focusSet) return G.focusSet[e.id] === 'core';   // 聚焦时只标焦点及其核心
+    if (G.focusSet) return !!G.focusSet[e.id];   // 聚焦时只标焦点及其核心
     var deg = degreeOf(e);
     // 全量图谱在侧栏里空间有限，默认只标枢纽实体；
     // 放大后逐步放出更多标签，避免 196 个名字糊成一片。
@@ -207,7 +293,8 @@
     G.relations.forEach(function (r) {
       var a = G.byId[r.head], b = G.byId[r.tail];
       if (!a || !b) return;
-      if (!G.visibleTypes[a.type] || !G.visibleTypes[b.type]) return;
+      if (!visible(a) || !visible(b)) return;
+      if ((r.relation === '关联' || r.relation === '关联条目') && a.id !== G.hover && b.id !== G.hover && a.id !== G.selected && b.id !== G.selected) return;
 
       var dim = false;
       if (G.hover) {
@@ -223,7 +310,7 @@
         ctx.strokeStyle = 'rgba(140,31,40,0.72)';
         ctx.lineWidth = 2.1 * inv;
       } else {
-        ctx.strokeStyle = 'rgba(90,70,60,0.30)';
+        ctx.strokeStyle = r.relation === '包含事件' ? '#CD792D' : /参与|指挥/.test(r.relation) ? '#2E6FA8' : r.relation === '发生于' ? '#1F6F5C' : 'rgba(90,70,60,0.22)';
         ctx.lineWidth = 1.0 * inv;
       }
 
@@ -250,7 +337,7 @@
 
     // 实体：类型被关闭时直接不画，避免留下一层灰点仍显得拥挤
     G.entities.forEach(function (e) {
-      if (!G.visibleTypes[e.type]) return;
+      if (!visible(e)) return;
       var st = TYPE_STYLE[e.type] || TYPE_STYLE.event;
       var r = radiusOf(e);
       var dim = isDim(e);
@@ -265,7 +352,8 @@
       }
 
       ctx.beginPath();
-      ctx.arc(e.gx, e.gy, r, 0, Math.PI * 2);
+      if(e.type==='node'){ctx.moveTo(e.gx,e.gy-r);ctx.lineTo(e.gx+r,e.gy);ctx.lineTo(e.gx,e.gy+r);ctx.lineTo(e.gx-r,e.gy);ctx.closePath();}
+      else ctx.arc(e.gx, e.gy, r, 0, Math.PI * 2);
       ctx.fillStyle = st.color;
       ctx.fill();
       ctx.lineWidth = 2 * inv;
@@ -322,7 +410,7 @@
     var y = (my - G.oy) / G.scale;
     var best = null, bestD = Infinity;
     G.entities.forEach(function (e) {
-      if (!G.visibleTypes[e.type]) return;
+      if (!visible(e)) return;
       var dx = e.gx - x, dy = e.gy - y;
       var d = Math.sqrt(dx * dx + dy * dy);
       if (d <= radiusOf(e) + 5 && d < bestD) { best = e; bestD = d; }
@@ -369,7 +457,7 @@
       if (hit) {
         G.dragNode = hit;
         G.selected = hit.id;
-        if (G.onPick) G.onPick(hit);
+        pickNarrative(hit);
       } else {
         G.panning = true;
         G.lastMouse = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
@@ -396,6 +484,7 @@
       draw();
     }, { passive: false });
 
+    c.addEventListener('touchend',function(ev){if(!ev.changedTouches.length)return;var t=ev.changedTouches[0],rect=c.getBoundingClientRect();var hit=hitTest(t.clientX-rect.left,t.clientY-rect.top);if(hit){ev.preventDefault();pickNarrative(hit);}}, {passive:false});
     c.addEventListener('dblclick', function () { resetView(); });
   }
 
@@ -409,7 +498,9 @@
     G.canvas.height = G.H * G.dpr;
     G.canvas.style.width = G.W + 'px';
     G.canvas.style.height = G.H + 'px';
-    if (G.laidOut) centerView();
+    if(G.mode==='all' && window.innerWidth<760){G.mode='main';G.focusSet=null;}
+    if(G.mode==='main')narrativeLayout();
+    if (G.laidOut) {fitVisible();draw();updateNarrativeUI();}
   }
 
   function centerView() {
@@ -424,7 +515,7 @@
   }
 
   function resetView() {
-    centerView();
+    fitVisible();
     draw();
   }
 
@@ -442,6 +533,7 @@
     G.relations = kg.relations || [];
     G.byId = {};
     G.entities.forEach(function (e) { G.byId[e.id] = e; });
+    G.relations=G.relations.filter(function(r){return G.byId[r.head] && G.byId[r.tail];});
 
     // 邻接表
     G.adj = {};
@@ -454,7 +546,7 @@
     Object.keys(TYPE_STYLE).forEach(function (t) {
       // 全量 196 个实体在侧栏里过于拥挤；默认先显示事件/人物/地点，
       // 文献与机构由用户按需勾选，关系边会随之自动过滤。
-      G.visibleTypes[t] = (t !== 'doc' && t !== 'org');
+      G.visibleTypes[t] = (t !== 'image' && t !== 'org');
     });
     G.hover = null;
     G.selected = null;
@@ -464,20 +556,23 @@
     G.lastMouse = null;
     G.laidOut = false;
 
-    layout(280);
+    stopStory();G.mode='main';
+    if(mainNodes().length)narrativeLayout();else {G.mode='all';layout(180);}
+    installNarrativeUI();
     resize();
-    centerView();
-    draw();
+    fitVisible();
+    draw();updateNarrativeUI();
     bind();
     if (!G.onResize) G.onResize = function () { resize(); draw(); };
     window.removeEventListener('resize', G.onResize);
     window.addEventListener('resize', G.onResize);
+    if(!mainNodes().length && G.entities.length)focusSubgraph(G.entities[0].id,1);
     return true;
   }
 
   function setTypeVisible(type, on) {
     G.visibleTypes[type] = !!on;
-    draw();
+    fitVisible();draw();updateNarrativeUI();
   }
 
   /**
@@ -495,19 +590,26 @@
       frontier.forEach(function (nid) {
         var nb = G.adj[nid] || {};
         Object.keys(nb).forEach(function (mid) {
+          if (/^关联/.test(nb[mid])) return;
           if (!set[mid]) { set[mid] = 'hop'; next.push(mid); }
         });
       });
       frontier = next;
       if (!next.length) break;
     }
-    Object.keys(G.adj[id] || {}).forEach(function (mid) { if (!set[mid]) set[mid] = 'hop'; });
+    // Generic media links remain available in the evidence detail, not in the default focus rings.
 
+    G.mode='focus';
     G.focusSet = set;
+    G.visibleTypes[G.byId[id].type]=true;
+    var rings=[[],[]];
+    Object.keys(set).forEach(function(mid){if(mid===id)return;var e=G.byId[mid];rings[e.type==='event'?0:1].push(e);});
+    G.byId[id].gx=450;G.byId[id].gy=320;
+    rings.forEach(function(arr,ring){arr.sort(function(a,b){return a.name.localeCompare(b.name);});arr.forEach(function(e,i){var a=i/arr.length*Math.PI*2;var r=ring?270:140;e.gx=450+Math.cos(a)*r;e.gy=320+Math.sin(a)*r;});});
     G.selected = id;
     G.hover = null;
     fitToFocus(set);
-    draw();
+    draw();updateNarrativeUI();
     return Object.keys(set).length;
   }
 
@@ -525,17 +627,13 @@
     var s = Math.min((G.W - pad * 2) / Math.max(maxX - minX, 1),
                      (G.H - pad * 2) / Math.max(maxY - minY, 1));
     // 上限 1.0：标签字号是按布局坐标画的，放大过多会变成巨大文字反而看不清
-    G.scale = Math.max(0.4, Math.min(1.0, s));
+    G.scale = Math.max(0.15, Math.min(1.0, s));
     var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     G.ox = G.W / 2 - cx * G.scale;
     G.oy = G.H / 2 - cy * G.scale;
   }
 
-  function clearFocus() {
-    if (!G.focusSet) return;
-    G.focusSet = null;
-    draw();
-  }
+  function clearFocus() { if(G.mode==='focus')viewMode('main'); }
 
   function focusByKeyword(kw) {
     if (!kw) { G.selected = null; G.hover = null; draw(); return null; }
@@ -553,6 +651,7 @@
     var e = found[0];
     G.selected = e.id;
     G.hover = e.id;
+    focusSubgraph(e.id,2);
     // 平移到该实体
     G.ox = G.W / 2 - e.gx * G.scale;
     G.oy = G.H / 2 - e.gy * G.scale;
@@ -572,6 +671,9 @@
 
   window.RgGraph = {
     init: init,
+    setViewMode: viewMode,
+    visibleEntities: function(){return G.entities.filter(visible).map(function(e){return e.id;});},
+    currentView: function(){return G.mode;},
     draw: draw,
     resize: resize,
     resetView: resetView,
