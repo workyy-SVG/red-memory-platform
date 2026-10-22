@@ -567,17 +567,24 @@
 
     h += '<div class="ex-narrative">' + esc(c.narrative) + '</div>';
 
-    // 朗读
+    // 讲解：语音不可用时提供可点击的完整文字稿
+    var canSpeak = ttsCanSpeak();
     h += '<div class="ex-tts" id="exTtsBar"><span>讲解</span>'
-      + '<button type="button" data-tts="play">播放</button>'
-      + '<button type="button" data-tts="pause">暂停</button>'
-      + '<button type="button" data-tts="stop">停止</button>'
-      + '<select id="exTtsRate" aria-label="语速">'
-      + '<option value="0.8">0.8×</option><option value="1" selected>1.0×</option>'
-      + '<option value="1.2">1.2×</option></select>'
-      + '<span class="ex-tts-now" id="exTtsNow">不自动播放；点「播放」朗读本章叙事与关键事实</span>'
-      + '<span class="ex-tts-hint">朗读由浏览器语音合成完成；不支持逐句字幕时降级为整段提示。'
-      + '内容以页面文字为准。</span></div>';
+      + '<button type="button" data-tts="play">' + (canSpeak ? '播放' : '查看讲解词') + '</button>';
+    if (canSpeak) {
+      h += '<button type="button" data-tts="pause">暂停</button>'
+        + '<button type="button" data-tts="stop">停止</button>'
+        + '<select id="exTtsRate" aria-label="语速">'
+        + '<option value="0.8">0.8×</option><option value="1" selected>1.0×</option>'
+        + '<option value="1.2">1.2×</option></select>';
+    }
+    h += '<span class="ex-tts-now" id="exTtsNow" role="status" aria-live="polite">'
+      + (canSpeak ? '不自动播放；点「播放」朗读本章叙事与关键事实'
+        : '当前浏览器没有语音朗读功能；点「查看讲解词」阅读完整文字。') + '</span>'
+      + '<span class="ex-tts-hint">语音朗读由浏览器提供，具体可用性取决于设备。'
+      + '内容以页面文字和证据标注为准。</span>'
+      + '<div class="ex-tts-transcript" id="exTtsTranscript" role="region"'
+      + ' aria-label="本章讲解词" hidden></div></div>';
 
     // 关键事实
     h += '<div class="ex-sec-title">关键事实<span class="ex-tag">逐条挂接来源</span></div>';
@@ -1077,7 +1084,18 @@
     (c.key_facts || []).forEach(function (f, i) {
       parts.push('关键事实' + (i + 1) + '。' + (f.text || ''));
     });
-    return parts.join('');
+    return parts.join('\n\n');
+  }
+  function ttsCanSpeak() {
+    return !!(window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function');
+  }
+  function showTtsTranscript(c, message) {
+    var el = byId('exTtsTranscript');
+    if (el) {
+      el.textContent = ttsText(c) + '\n\n出处请查看下方「关键事实」中的来源标注。';
+      el.hidden = false;
+    }
+    ttsNow(message);
   }
   function splitSentences(t) {
     var out = [];
@@ -1096,8 +1114,8 @@
   function speakChapter() {
     var c = chOf(state.chapter);
     if (!c) return;
-    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-      ttsNow('当前浏览器不支持语音合成，请直接阅读正文。');
+    if (!ttsCanSpeak()) {
+      showTtsTranscript(c, '当前浏览器没有语音朗读功能，已展开完整讲解词。');
       return;
     }
     stopTts(true);
@@ -1130,14 +1148,15 @@
       ttsNow('朗读结束');
       if (!boundarySeen) ttsNow('朗读结束（当前浏览器不支持逐句字幕）');
     };
-    u.onerror = function () {
+    u.onerror = function (ev) {
+      if (TTS.utt !== u || (ev && (ev.error === 'canceled' || ev.error === 'interrupted'))) return;
       TTS.active = false;
       TTS.paused = false;
-      ttsNow('语音合成未能启动，请直接阅读正文。');
+      showTtsTranscript(c, '语音朗读中断，已展开完整讲解词。');
     };
     TTS.utt = u;
     try { TTS.synth.cancel(); TTS.synth.speak(u); }
-    catch (e) { ttsNow('语音合成未能启动，请直接阅读正文。'); }
+    catch (e) { showTtsTranscript(c, '语音朗读未能启动，已展开完整讲解词。'); }
   }
   function pauseTts() {
     if (!TTS.synth) return;
